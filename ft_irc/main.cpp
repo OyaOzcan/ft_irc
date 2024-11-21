@@ -4,5 +4,10 @@
 int main() {
     Server server;
 
-    std::cout << server.getAbc() << std::endl;
+    server.setup(6667);
+    while (true)
+    {
+        
+    }
+    
 }

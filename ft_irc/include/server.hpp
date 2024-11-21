@@ -1,14 +1,22 @@
-
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include <iostream>
+#define MAX_CLIENTS 1024
+
+#include "common.hpp"
 
 class Server {
-    private:
-        std::string abc;
-    public:
-        std::string getAbc();
+private:
+    int _socket;
+    unsigned _port;
+    std::string  _password;
+
+public:
+    Server();
+    ~Server();
+
+    void setup(unsigned port);
+
 };
 
 #endif

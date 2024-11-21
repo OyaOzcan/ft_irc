@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <sstream>
 #include <set>
+#include "channel.hpp"
 #include "server.hpp"
 
 #endif
