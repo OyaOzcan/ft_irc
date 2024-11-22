@@ -60,12 +60,7 @@ void Server::run() {
                 poll_fds.push_back(client_pollfd);
 
                 std::cout << "Yeni bir istemci bağlandı: " << client_fd << std::endl;
-
                 client_authenticated[client_fd] = false; // İstemci ilk başta doğrulanmamış
-
-                // İstemciye şifre mesajı gönder
-                std::string prompt_message = "Lütfen şifrenizi giriniz:\n";
-                send(client_fd, prompt_message.c_str(), prompt_message.size(), 0);
             } else if (poll_fds[i].revents & POLLIN) {
                 char buffer[1024] = {0};
                 int bytes_read = recv(poll_fds[i].fd, buffer, sizeof(buffer), 0);
@@ -75,7 +70,7 @@ void Server::run() {
 
                     // Şifre kontrolü
                     if (!client_authenticated[poll_fds[i].fd]) {
-                        if (message.find(password) != std::string::npos) {
+                        if (message == password) {
                             client_authenticated[poll_fds[i].fd] = true;
                             std::string success_message = "Doğrulama başarılı.\n";
                             send(poll_fds[i].fd, success_message.c_str(), success_message.size(), 0);
@@ -88,10 +83,6 @@ void Server::run() {
                             client_authenticated.erase(poll_fds[i].fd);
                             --i;
                         }
-                    } else {
-                        // Doğrulanan istemciler için iletişim
-                        std::string echo_message = "Mesajınız alındı: " + message;
-                        send(poll_fds[i].fd, echo_message.c_str(), echo_message.size(), 0);
                     }
                 } else {
                     close(poll_fds[i].fd);
