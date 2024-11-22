@@ -1,4 +1,5 @@
-#include "common.hpp"
+#include "server.hpp"
+#include <sstream> 
 
 Server::Server() : server_fd(-1) {}
 
@@ -60,7 +61,7 @@ void Server::run() {
                 poll_fds.push_back(client_pollfd);
 
                 std::cout << "Yeni bir istemci bağlandı: " << client_fd << std::endl;
-                client_authenticated[client_fd] = false; // İstemci ilk başta doğrulanmamış
+                client_authenticated[client_fd] = false; // İstemci doğrulanmadı
             } else if (poll_fds[i].revents & POLLIN) {
                 char buffer[1024] = {0};
                 int bytes_read = recv(poll_fds[i].fd, buffer, sizeof(buffer), 0);
@@ -68,21 +69,19 @@ void Server::run() {
                     std::string message(buffer);
                     std::cout << "İstemci " << poll_fds[i].fd << " mesaj gönderdi: " << message << std::endl;
 
-                    // Şifre kontrolü
                     if (!client_authenticated[poll_fds[i].fd]) {
-                        if (message == password) {
-                            client_authenticated[poll_fds[i].fd] = true;
-                            std::string success_message = "Doğrulama başarılı.\n";
-                            send(poll_fds[i].fd, success_message.c_str(), success_message.size(), 0);
+                        if (checkPassword(message, poll_fds[i].fd)) {
                             std::cout << "İstemci " << poll_fds[i].fd << " başarıyla doğrulandı." << std::endl;
                         } else {
-                            std::string failure_message = "Hatalı şifre. Bağlantı kesiliyor.\n";
+                            std::string failure_message = "Hatalı şifre. Bağlantı kesiliyor.\r\n";
                             send(poll_fds[i].fd, failure_message.c_str(), failure_message.size(), 0);
                             close(poll_fds[i].fd);
                             poll_fds.erase(poll_fds.begin() + i);
                             client_authenticated.erase(poll_fds[i].fd);
                             --i;
                         }
+                    } else {
+                        std::cout << "Doğrulanmış istemciden mesaj: " << message << std::endl;
                     }
                 } else {
                     close(poll_fds[i].fd);
@@ -93,4 +92,34 @@ void Server::run() {
             }
         }
     }
+}
+
+bool Server::checkPassword(const std::string& message, int client_fd) {
+    std::istringstream stream(message); // Mesajı satır bazında işlemek için
+    std::string line;
+
+    while (std::getline(stream, line)) { // Her satırı sırayla kontrol edin
+        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end()); // \r kaldır
+        line.erase(std::remove(line.begin(), line.end(), '\n'), line.end()); // \n kaldır
+
+        if (line.find("PASS :") == 0) { // "PASS :" ile başlayan satırı bulun
+            std::string received_password = line.substr(6); // "PASS :" kısmını atla
+            std::cout << "Gelen şifre: " << received_password << std::endl;
+            std::cout << "Beklenen şifre: " << password << std::endl;
+
+            if (received_password == password) {
+                client_authenticated[client_fd] = true;
+                std::string success_message = "Doğrulama başarılı.\r\n";
+                send(client_fd, success_message.c_str(), success_message.size(), 0);
+                return true;
+            } else {
+                std::cerr << "Hatalı şifre: " << received_password << std::endl;
+                return false;
+            }
+        }
+    }
+
+    // Eğer mesajda PASS komutu yoksa
+    std::cerr << "PASS komutu bulunamadı." << std::endl;
+    return false;
 }
