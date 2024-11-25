@@ -1,7 +1,7 @@
 #ifndef COMMAND_HPP
 #define COMMAND_HPP
 
-#include "common.hpp"
+#include "Common.hpp"
 
 class Command {
 public:

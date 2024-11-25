@@ -1,125 +1,144 @@
-#include "server.hpp"
-#include <sstream> 
+#include "Server.hpp"
 
-Server::Server() : server_fd(-1) {}
-
-Server::~Server() {
-    if (server_fd != -1) close(server_fd);
+bool Server::isClientFd(const pollfd& p, int client_fd) {
+    return p.fd == client_fd;
 }
 
-void Server::setup(int port, std::string _password) {
-    struct sockaddr_in address;
-    password = _password; // Şifreyi sakla
+Server::Server(int port, const std::string& password) 
+    : _server_fd(-1), _authenticator(password) {
+    setupSocket(port);
+}
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        perror("Socket oluşturulamadı");
-        exit(1);
+Server::~Server() {
+    if (_server_fd != -1) {
+        close(_server_fd);
     }
+}
 
-    fcntl(server_fd, F_SETFL, O_NONBLOCK);
+void Server::setupSocket(int port) {
+    _server_fd = createSocket();
+    setSocketNonBlocking(_server_fd);
+    bindSocket(_server_fd, port);
+    startListening(_server_fd);
 
+    pollfd server_poll_fd = {_server_fd, POLLIN, 0};
+    _poll_fds.push_back(server_poll_fd);
+}
+
+int Server::createSocket() {
+    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd < 0) {
+        throw std::runtime_error("Socket creation failed");
+    }
+    return socket_fd;
+}
+
+void Server::setSocketNonBlocking(int socket_fd) {
+    if (fcntl(socket_fd, F_SETFL, O_NONBLOCK) < 0) {
+        close(socket_fd);
+        throw std::runtime_error("Failed to set socket to non-blocking");
+    }
+}
+
+void Server::bindSocket(int socket_fd, int port) {
+    struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        perror("Bind hatası");
-        close(server_fd);
-        exit(1);
+    if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        close(socket_fd);
+        throw std::runtime_error("Bind failed");
     }
+}
 
-    if (listen(server_fd, 10) < 0) {
-        perror("Listen hatası");
-        close(server_fd);
-        exit(1);
+void Server::startListening(int socket_fd) {
+    if (listen(socket_fd, 10) < 0) {
+        close(socket_fd);
+        throw std::runtime_error("Listen failed");
     }
-
-    pollfd server_pollfd = {server_fd, POLLIN, 0};
-    poll_fds.push_back(server_pollfd);
 }
 
 void Server::run() {
-    while (true) {
-        int poll_count = poll(poll_fds.data(), poll_fds.size(), -1);
-        if (poll_count < 0) {
-            perror("Poll hatası");
-            break;
-        }
+    try {
+        while (true) {
+            int poll_count = poll(&_poll_fds[0], _poll_fds.size(), -1);
+            if (poll_count < 0) {
+                throw std::runtime_error("Poll error");
+            }
 
-        for (size_t i = 0; i < poll_fds.size(); ++i) {
-            if (poll_fds[i].fd == server_fd && (poll_fds[i].revents & POLLIN)) {
-                int client_fd = accept(server_fd, NULL, NULL);
-                if (client_fd < 0) {
-                    perror("Accept hatası");
-                    continue;
-                }
-
-                fcntl(client_fd, F_SETFL, O_NONBLOCK);
-
-                pollfd client_pollfd = {client_fd, POLLIN, 0};
-                poll_fds.push_back(client_pollfd);
-
-                std::cout << "Yeni bir istemci bağlandı: " << client_fd << std::endl;
-                client_authenticated[client_fd] = false; // İstemci doğrulanmadı
-            } else if (poll_fds[i].revents & POLLIN) {
-                char buffer[1024] = {0};
-                int bytes_read = recv(poll_fds[i].fd, buffer, sizeof(buffer), 0);
-                if (bytes_read > 0) {
-                    std::string message(buffer);
-                    std::cout << "İstemci " << poll_fds[i].fd << " mesaj gönderdi: " << message << std::endl;
-
-                    if (!client_authenticated[poll_fds[i].fd]) {
-                        if (checkPassword(message, poll_fds[i].fd)) {
-                            std::cout << "İstemci " << poll_fds[i].fd << " başarıyla doğrulandı." << std::endl;
-                        } else {
-                            std::string failure_message = "Hatalı şifre. Bağlantı kesiliyor.\r\n";
-                            send(poll_fds[i].fd, failure_message.c_str(), failure_message.size(), 0);
-                            close(poll_fds[i].fd);
-                            poll_fds.erase(poll_fds.begin() + i);
-                            client_authenticated.erase(poll_fds[i].fd);
-                            --i;
-                        }
-                    } else {
-                        std::cout << "Doğrulanmış istemciden mesaj: " << message << std::endl;
-                    }
-                } else {
-                    close(poll_fds[i].fd);
-                    poll_fds.erase(poll_fds.begin() + i);
-                    client_authenticated.erase(poll_fds[i].fd);
-                    --i;
+            for (size_t i = 0; i < _poll_fds.size(); ++i) {
+                if (_poll_fds[i].fd == _server_fd && (_poll_fds[i].revents & POLLIN)) {
+                    handleNewClient();
+                } else if (_poll_fds[i].revents & POLLIN) {
+                    handleClientMessage(_poll_fds[i].fd);
                 }
             }
         }
+    } catch (const std::exception& ex) {
+        std::cerr << "Server error: " << ex.what() << std::endl;
     }
 }
 
-bool Server::checkPassword(const std::string& message, int client_fd) {
-    std::istringstream stream(message); // Mesajı satır bazında işlemek için
-    std::string line;
+void Server::handleNewClient() {
+    try {
+        int client_fd = accept(_server_fd, NULL, NULL);
+        if (client_fd < 0) {
+            throw std::runtime_error("Accept failed");
+        }
 
-    while (std::getline(stream, line)) { // Her satırı sırayla kontrol edin
-        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end()); // \r kaldır
-        line.erase(std::remove(line.begin(), line.end(), '\n'), line.end()); // \n kaldır
+        setSocketNonBlocking(client_fd);
 
-        if (line.find("PASS :") == 0) { // "PASS :" ile başlayan satırı bulun
-            std::string received_password = line.substr(6); // "PASS :" kısmını atla
-            std::cout << "Gelen şifre: " << received_password << std::endl;
-            std::cout << "Beklenen şifre: " << password << std::endl;
+        pollfd client_poll_fd = {client_fd, POLLIN, 0};
+        _poll_fds.push_back(client_poll_fd);
+        _client_authenticated[client_fd] = false;
 
-            if (received_password == password) {
-                client_authenticated[client_fd] = true;
-                std::string success_message = "Doğrulama başarılı.\r\n";
+        std::cout << "New client connected: " << client_fd << std::endl;
+    } catch (const std::exception& ex) {
+        std::cerr << "Error in handleNewClient: " << ex.what() << std::endl;
+    }
+}
+
+void Server::handleClientMessage(int client_fd) {
+    char buffer[1024] = {0};
+    int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
+
+    if (bytes_read > 0) {
+        std::string message(buffer);
+        if (!_client_authenticated[client_fd]) {
+            std::string error_message;
+            if (_authenticator.authenticate(message, error_message)) {
+                _client_authenticated[client_fd] = true;
+                std::string success_message = "Authentication successful.\n";
                 send(client_fd, success_message.c_str(), success_message.size(), 0);
-                return true;
             } else {
-                std::cerr << "Hatalı şifre: " << received_password << std::endl;
-                return false;
+                std::cerr << "Authentication failed: " << error_message << std::endl;
+                std::string failure_message = error_message + "\n";
+                send(client_fd, failure_message.c_str(), failure_message.size(), 0);
+                close(client_fd);
+
+                for (size_t i = 0; i < _poll_fds.size(); ++i) {
+                    if (isClientFd(_poll_fds[i], client_fd)) {
+                        _poll_fds.erase(_poll_fds.begin() + i);
+                        break;
+                    }
+                }
+
+                _client_authenticated.erase(client_fd);
+            }
+        } else {
+            std::cout << "Message from authenticated client " << client_fd << ": " << message << std::endl;
+        }
+    } else {
+        close(client_fd);
+
+        for (size_t i = 0; i < _poll_fds.size(); ++i) {
+            if (isClientFd(_poll_fds[i], client_fd)) {
+                _poll_fds.erase(_poll_fds.begin() + i);
+                break;
             }
         }
-    }
 
-    // Eğer mesajda PASS komutu yoksa
-    std::cerr << "PASS komutu bulunamadı." << std::endl;
-    return false;
+        _client_authenticated.erase(client_fd);
+    }
 }
