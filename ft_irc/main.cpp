@@ -1,8 +1,8 @@
-#include "server.hpp"
+#include "Server.hpp"
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Kullanım: ./ircserv <port> <password>" << std::endl;
+        std::cerr << "Usage: ./ircserv <port> <password>" << std::endl;
         return 1;
     }
 
@@ -10,18 +10,22 @@ int main(int argc, char** argv) {
     std::string password = argv[2];
 
     if (port <= 0 || port > 65535) {
-        std::cerr << "Hata: Port numarası 1 ile 65535 arasında olmalıdır." << std::endl;
+        std::cerr << "Error: Port number must be between 1 and 65535." << std::endl;
         return 1;
     }
 
     if (password.empty()) {
-        std::cerr << "Hata: Şifre boş olamaz." << std::endl;
+        std::cerr << "Error: Password cannot be empty." << std::endl;
         return 1;
     }
 
-    Server server;
-    server.setup(port, password);
-    server.run();
+    try {
+        Server server(port, password);
+        server.run();
+    } catch (const std::exception& e) {
+        std::cerr << "Server error: " << e.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }
