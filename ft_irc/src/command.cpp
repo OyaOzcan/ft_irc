@@ -1,4 +1,4 @@
-#include "Command.hpp"
+#include "command.hpp"
 
 // Mesajdan komutu ayıklar (ör. "PASS :1234" -> "PASS")
 std::string Command::parseCommand(const std::string& message) {

@@ -3,6 +3,8 @@
 
 #include "Common.hpp"
 #include "Authenticator.hpp"
+#include "Numeric.hpp"
+#include "User.hpp"
 
 class Server {
 private:
@@ -16,7 +18,6 @@ private:
     void setSocketNonBlocking(int socket_fd);
     void bindSocket(int socket_fd, int port);
     void startListening(int socket_fd);
-
     void handleNewClient();
     void handleClientMessage(int client_fd);
     bool isClientFd(const pollfd& p, int client_fd);

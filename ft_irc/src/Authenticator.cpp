@@ -1,4 +1,5 @@
 #include "../include/Authenticator.hpp"
+#include "../include/Numeric.hpp"
 
 Authenticator::Authenticator(const std::string& server_password)
     : _password(server_password) {}
@@ -17,12 +18,12 @@ bool Authenticator::authenticate(const std::string& message, std::string& error_
             if (received_password == _password) {
                 return true;
             } else {
-                error_message = "Invalid password.";
+                error_message = Numeric::ERR_PASSWDMISMATCH();
                 return false;
             }
         }
     }
 
-    error_message = "No password provided.";
+    error_message = Numeric::ERR_NEEDMOREPARAMS("PASS");
     return false;
 }
