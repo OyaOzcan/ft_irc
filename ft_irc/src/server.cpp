@@ -16,8 +16,8 @@ Server::~Server() {
 }
 
 void Server::setupSocket(int port) {
-    _server_fd = createSocket();
-    setSocketNonBlocking(_server_fd);
+    _server_fd = createSocket(); // socket_fd oluşturuldu.
+    setSocketNonBlocking(_server_fd); // socket_fd non-blocking yapıldı.
     bindSocket(_server_fd, port);
     startListening(_server_fd);
 
@@ -26,7 +26,7 @@ void Server::setupSocket(int port) {
 }
 
 int Server::createSocket() {
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int socket_fd = socket(AF_INET, SOCK_STREAM, 0); // AF_INET = IPv4 , SOCK_STREAM = "Bağlantı Türü tipi" TCP, 0 = "Protokol" (IP)
     if (socket_fd < 0) {
         throw std::runtime_error("Socket creation failed");
     }
@@ -34,6 +34,7 @@ int Server::createSocket() {
 }
 
 void Server::setSocketNonBlocking(int socket_fd) {
+    // TODO : linux için değiştirmek lazım.
     if (fcntl(socket_fd, F_SETFL, O_NONBLOCK) < 0) {
         close(socket_fd);
         throw std::runtime_error("Failed to set socket to non-blocking");
@@ -87,7 +88,7 @@ void Server::handleNewClient() {
             throw std::runtime_error("Accept failed");
         }
 
-        setSocketNonBlocking(client_fd);
+        //setSocketNonBlocking(client_fd);
 
         pollfd client_poll_fd = {client_fd, POLLIN, 0};
         _poll_fds.push_back(client_poll_fd);
@@ -109,13 +110,14 @@ void Server::handleClientMessage(int client_fd) {
             std::string error_message;
             if (_authenticator.authenticate(message, error_message)) {
                 _client_authenticated[client_fd] = true;
-                std::string success_message = "Authentication successful.\n";
+                std::string success_message = Numeric::RPL_WELCOME("Nick", "User", "Host") + "\n";
+                std::cout << "Client " << client_fd << " authenticated." << std::endl;
                 send(client_fd, success_message.c_str(), success_message.size(), 0);
             } else {
                 std::cerr << "Authentication failed: " << error_message << std::endl;
                 std::string failure_message = error_message + "\n";
                 send(client_fd, failure_message.c_str(), failure_message.size(), 0);
-                close(client_fd);
+                /*close(client_fd);
 
                 for (size_t i = 0; i < _poll_fds.size(); ++i) {
                     if (isClientFd(_poll_fds[i], client_fd)) {
@@ -124,7 +126,7 @@ void Server::handleClientMessage(int client_fd) {
                     }
                 }
 
-                _client_authenticated.erase(client_fd);
+                _client_authenticated.erase(client_fd);*/
             }
         } else {
             std::cout << "Message from authenticated client " << client_fd << ": " << message << std::endl;

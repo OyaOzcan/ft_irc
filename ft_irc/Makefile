@@ -2,8 +2,8 @@ NAME = ircserv
 
 SRC = main.cpp \
 	  src/Server.cpp \
-	  src/Command.cpp \
 	  src/Authenticator.cpp \
+	  src/User.cpp \
 
 CC = c++
 
