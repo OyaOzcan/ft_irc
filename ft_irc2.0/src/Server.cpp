@@ -123,7 +123,8 @@ void Server::handleClientMessage(int client_fd) {
         std::string line;
 
         while (std::getline(message_stream, line)) {
-            line.erase(line.find_last_not_of("\r") + 1); // Fazla '\r' karakterlerini temizle
+
+            //line.erase(line.find_last_not_of("\r") + 1); // Fazla '\r' karakterlerini temizle
 
             std::cout << "\n-----------------------\n";
             std::cout << "Processing command: " << line << "\n";
@@ -139,7 +140,14 @@ void Server::handleClientMessage(int client_fd) {
                     std::cout << "PASS command received.\n";
                     if (Command::processPassCommand(line, _authenticator.getPassword())) {
                         user.setState(WAITING_FOR_NICK);
-                        send(client_fd, "PASS accepted. Please provide NICK.\r\n", 39, 0);
+						if (line.find("\r") != std::string::npos) {
+							std::string welcome_message = Numeric::RPL_WELCOME(user.getNickname(), user.getUsername(), user.getHostname()) + "\r\n";
+							Command::processNickCommand(user, line, welcome_message);
+                        	//send(client_fd, welcome_message.c_str(), welcome_message.size(), 0);
+                        	//send(client_fd, "PASS accepted. Please provide NICK1.\r\n\n", 39, 0);
+						}else {
+							send(client_fd, "PASS accepted. Please provide NICK.\r\n", 39, 0);
+						}
                         std::cout << "Password authentication successful.\n";
                     } else {
                         send(client_fd, "ERR_PASSWDMISMATCH :Password incorrect\r\n", 41, 0);
@@ -171,7 +179,7 @@ void Server::handleClientMessage(int client_fd) {
                     std::cout << "USER command received.\n";
                     if (Command::processUserCommand(user, line, error_message)) {
                         user.setState(FULLY_REGISTERED);
-                        std::string welcome_message = "001 " + user.getNickname() + " :Welcome to the Internet Relay Network\r\n";
+                        std::string welcome_message = Numeric::RPL_WELCOME(user.getNickname(), user.getUsername(), user.getHostname()) + "\r\n";
                         send(client_fd, welcome_message.c_str(), welcome_message.size(), 0);
                         std::cout << "User registration complete for: " << user.getNickname() << "\n";
                     } else {

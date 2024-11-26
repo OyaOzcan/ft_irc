@@ -13,8 +13,8 @@ bool Authenticator::authenticate(const std::string& message, std::string& error_
         line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
         line.erase(std::remove(line.begin(), line.end(), '\n'), line.end());
 
-        if (line.find("PASS ") == 0) {
-            std::string received_password = line.substr(5);
+        if (line.find(":") == 0) {
+            std::string received_password = line.substr(6);
             if (received_password == _password) {
                 return true;
             } else {
