@@ -27,6 +27,14 @@ public:
     static std::string ERR_NONICKNAMEGIVEN() {
         return "431 :No nickname given";
     }
+
+    static std::string ERR_NOSUCHCHANNEL(const std::string& channel) {
+        return "403 " + channel + " :No such channel";
+    }
+
+    static std::string ERR_NOSUCHNICK(const std::string& nick) {
+        return "401 " + nick + " :No such nick/channel";
+    }
 };
 
 #endif

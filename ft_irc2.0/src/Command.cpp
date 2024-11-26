@@ -85,3 +85,46 @@ bool Command::processUserCommand(User& user, const std::string& message, std::st
     return true;
 }
 
+// // Gelen mesajdan komut adını döndürür (ilk kelime)
+// std::string Command::parseCommand(const std::string& message) {
+//     std::istringstream stream(message);
+//     std::string command;
+//     stream >> command;
+//     return command;
+// }
+
+// CREATE komutundan kanal adını döndürür
+std::string Command::getChannelName(const std::string& message) {
+    std::istringstream stream(message);
+    std::string command, channelName;
+
+    // İlk kelime komut (CREATE) olacak
+    stream >> command;
+
+    // İkinci kelime kanal adı olacak
+    if (!(stream >> channelName)) {
+        return ""; // Kanal adı yoksa boş döndür
+    }
+
+    return channelName;
+}
+
+// CREATE komutundan topic'i döndürür (isteğe bağlı)
+std::string Command::getTopic(const std::string& message) {
+    std::istringstream stream(message);
+    std::string command, channelName, topic;
+
+    // İlk iki kelimeyi atla (CREATE ve kanal adı)
+    stream >> command >> channelName;
+
+    // Geri kalan kısmı topic olarak al
+    std::getline(stream, topic);
+
+    // Leading boşlukları temizle
+    size_t start = topic.find_first_not_of(" ");
+    if (start != std::string::npos) {
+        topic = topic.substr(start);
+    }
+
+    return topic;
+}

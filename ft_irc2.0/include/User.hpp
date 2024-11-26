@@ -24,6 +24,7 @@ private:
    // bool _has_username;
     ClientState _state; // Kullanıcının durumu
    // bool _is_registered;
+   int          _fd;
 
 public:
     User();
@@ -40,6 +41,10 @@ public:
     void setHostname(const std::string& hostname);
 
     ClientState getState() const;
+
+    int getFd() const;
+    void setFd(int fd);
+    
     void setState(ClientState state);
 
     bool isFullyRegistered() const;

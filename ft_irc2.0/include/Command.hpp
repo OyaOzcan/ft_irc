@@ -22,6 +22,13 @@ public:
 
     // Genel komut işlem şablonu
     static void handleCommand(const std::string& command, int client_fd);
+
+
+    // CREATE komutu için kanal adını alır
+    static std::string getChannelName(const std::string& message);
+
+    // CREATE komutu için topic'i alır
+    static std::string getTopic(const std::string& message);
 };
 
 #endif // COMMAND_HPP

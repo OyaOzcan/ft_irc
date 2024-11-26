@@ -99,17 +99,31 @@ void Server::handleNewClient() {
             throw std::runtime_error("Accept failed");
         }
 
-        //setSocketNonBlocking(client_fd);
-
         pollfd client_poll_fd = {client_fd, POLLIN, 0};
         _poll_fds.push_back(client_poll_fd);
-        _client_authenticated[client_fd] = false;
+
+        // Kullanıcı oluştur ve fd değerini ata
+        User new_user;
+        new_user.setFd(client_fd); // Yeni eklenen setFd çağrısı
+        _clients[client_fd] = new_user;
 
         std::cout << "New client connected: " << client_fd << std::endl;
     } catch (const std::exception& ex) {
         std::cerr << "Error in handleNewClient: " << ex.what() << std::endl;
     }
 }
+
+
+ssize_t Server::sendMessage(int client_fd, const std::string& message) {
+    ssize_t bytes_sent = send(client_fd, message.c_str(), message.size(), 0);
+    if (bytes_sent < 0) {
+        perror("send failed");
+    }
+    return bytes_sent;
+}
+
+
+
 
 void Server::handleClientMessage(int client_fd) {
     char buffer[1024] = {0};
@@ -133,6 +147,77 @@ void Server::handleClientMessage(int client_fd) {
             std::string command = Command::parseCommand(line);
             std::string error_message;
             User& user = _clients[client_fd];
+            if (command == "CREATE") {
+                std::string channelName = Command::getChannelName(line);
+                std::string topic = Command::getTopic(line);
+                try {
+                    createChannel(channelName, topic);
+                    send(client_fd, "Channel created successfully\r\n", 31, 0);
+                } catch (const std::exception& e) {
+                    send(client_fd, e.what(), strlen(e.what()), 0);
+                }
+            } else if (command == "JOIN") {
+                std::string channelName = Command::getChannelName(line);
+                Channel* channel = getChannel(channelName);
+
+                if (channel) {
+                    if (!channel->isMember(&user)) {
+                        channel->addMember(&user);  // Kullanıcıyı kanala ekle
+                        channel->sendJoin(&user);  // Diğer üyelere katılım bildirimi gönder
+                        send(client_fd, ("Joined channel: " + channelName + "\r\n").c_str(), 31, 0);
+                        std::cout << user.getNickname() << " joined channel: " << channelName << std::endl;
+                    } else {
+                        send(client_fd, "You are already in the channel\r\n", 33, 0);
+                    }
+                } else {
+                    send(client_fd, "No such channel exists\r\n", 25, 0);
+                }
+            }
+
+            if (command == "NAMES") {
+                std::string channelName = Command::getChannelName(line);
+                Channel* channel = getChannel(channelName);
+                if (channel) {
+                    channel->sendNames(&user); // Kanal içindeki kullanıcıları gönder
+                } else {
+                    send(client_fd, "No such channel exists\r\n", 25, 0);
+                }
+            }
+            if (command == "PRIVMSG") {
+                size_t first_space = line.find(' ');
+                if (first_space == std::string::npos) {
+                    std::string error_message = Numeric::ERR_NEEDMOREPARAMS("PRIVMSG") + "\r\n";
+                    send(client_fd, error_message.c_str(), error_message.size(), 0);
+                    return;
+                }
+
+                size_t second_space = line.find(' ', first_space + 1);
+                if (second_space == std::string::npos) {
+                    std::string error_message = Numeric::ERR_NEEDMOREPARAMS("PRIVMSG") + "\r\n";
+                    send(client_fd, error_message.c_str(), error_message.size(), 0);
+                    return;
+                }
+
+                std::string target = line.substr(first_space + 1, second_space - first_space - 1);
+                std::string message = line.substr(second_space + 2); // ':' işaretinden sonra mesaj
+
+                std::cout << "Target: " << target << ", Message: " << message << std::endl;
+
+                if (target[0] == '#') { // Kanal mesajı
+                    Channel* channel = getChannel(target.substr(1)); // '#' sonrası kanal adı
+                    if (channel) {
+                        channel->sendMessage(&user, message); // Kanal üyelerine mesaj gönder
+                    } else {
+                        std::string error_message = Numeric::ERR_NOSUCHCHANNEL(target) + "\r\n";
+                        send(client_fd, error_message.c_str(), error_message.size(), 0);
+                    }
+                } else {
+                    std::string error_message = Numeric::ERR_NOSUCHNICK(target) + "\r\n";
+                    send(client_fd, error_message.c_str(), error_message.size(), 0);
+                }
+            }
+
+
 
             switch (user.getState()) {
             case NOT_AUTHENTICATED:
@@ -194,6 +279,7 @@ void Server::handleClientMessage(int client_fd) {
             case FULLY_REGISTERED:
                 std::cout << "Message from " << user.getNickname() << ": " << line << "\n";
                 break;
+                
 
             default:
                 send(client_fd, "ERR_UNKNOWNCOMMAND :Unknown command\r\n", 38, 0);
@@ -204,5 +290,40 @@ void Server::handleClientMessage(int client_fd) {
         close(client_fd);
         _clients.erase(client_fd);
         std::cout << "Client disconnected: " << client_fd << "\n";
+    }
+}
+
+
+// CHANNEL İŞLEMLERİ
+
+void Server::createChannel(const std::string& channelName, const std::string& topic,
+                           const std::string& password, int userLimit) {
+    if (_channels.find(channelName) != _channels.end()) {
+        throw std::runtime_error("Channel already exists: " + channelName);
+    }
+    _channels[channelName] = new Channel(this, channelName, topic, password, userLimit);
+    std::cout << "Channel created: " << channelName << std::endl;
+}
+
+Channel* Server::getChannel(const std::string& channelName) {
+    std::cout << "getChannel called for: " << channelName << std::endl;
+    if (_channels.find(channelName) == _channels.end()) {
+        std::cout << "Channel not found: " << channelName << std::endl;
+        return NULL; // Kanal bulunamadı
+    }
+    std::cout << "Channel found: " << channelName << std::endl;
+    return _channels[channelName];
+}
+
+
+
+void Server::deleteChannel(const std::string& channelName) {
+    std::map<std::string, Channel*>::iterator it = _channels.find(channelName);
+    if (it != _channels.end()) {
+        delete it->second; // Kanal belleğini serbest bırak
+        _channels.erase(it);
+        std::cout << "Channel deleted: " << channelName << std::endl;
+    } else {
+        std::cerr << "Attempted to delete a non-existent channel: " << channelName << std::endl;
     }
 }

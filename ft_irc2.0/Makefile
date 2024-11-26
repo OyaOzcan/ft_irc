@@ -5,6 +5,7 @@ SRC = main.cpp \
 	  src/Authenticator.cpp \
 	  src/User.cpp \
 	  src/Command.cpp \
+	  src/Channel.cpp \
 
 CC = c++
 

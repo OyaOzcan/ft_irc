@@ -16,6 +16,11 @@ void User::setUsername(const std::string& username) { _username = username; }
 void User::setHostname(const std::string& hostname) { _hostname = hostname; }
 
 ClientState User::getState() const { return _state; }
+int User::getFd() const { return _fd; }
+void User::setFd(int fd) { 
+    _fd = fd;
+    std::cout << "File descriptor set for user: " << _nickname << " fd: " << _fd << std::endl;
+}
 void User::setState(ClientState state) { _state = state; }
 
 bool User::isFullyRegistered() const { return _state == FULLY_REGISTERED; }
