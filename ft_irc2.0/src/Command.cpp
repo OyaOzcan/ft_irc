@@ -12,14 +12,14 @@ std::string Command::parseCommand(const std::string& message) {
 // Şifre kontrolünü gerçekleştirir
 bool Command::processPassCommand(const std::string& message, const std::string& expected_password) {
     // Komutun "PASS " ile başladığını kontrol edin
-    if (message.find("PASS ") != 0) {
+    if (message.find("PASS :") != 0) {
         return false; // Format hatası
     }
 
     // Şifre kısmını alın ve temizleyin
-    std::string received_password = message.substr(5); // "PASS " kısmını atla
+    std::string received_password = message.substr(6); // "PASS " kısmını atla
     received_password.erase(received_password.find_last_not_of("\r\n") + 1); // Fazlalıkları temizle
-    received_password = received_password.substr(received_password.find_first_not_of(":")); // ":"'yi çıkar
+    //received_password = received_password.substr(received_password.find_first_not_of(":")); // ":"'yi çıkar
 
     if (received_password != expected_password) {
         return false; // Şifre eşleşmedi
